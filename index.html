@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TEC Contour Map, Thailand and Philippines</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Ionospheric TEC Consistency between Thailand and Philippines from Paired GPS Observations</h1>
+    <p>ข้อมูล GPS TEC จาก 4 สถานี เดือนมกราคมถึงมิถุนายน 2026</p>
+    <p class="nav"><b>Contour map</b> | <a href="global.html">Global map</a></p>
+  </header>
+
+  <p class="remark"><b>หมายเหตุ</b> ค่าในหน้านี้สร้างใหม่จากไฟล์ดิบและเรียงบนเวลา UT แล้ว แต่ยังเป็นค่าที่เครื่องบันทึก ซึ่งมีลักษณะเป็นตารางตามเดือนและเวลา ไม่ใช่ TEC ที่ยืนยันว่าวัดได้ จึงยังไม่ควรใช้เป็นผลการศึกษา ดู<a href="#notes">รายละเอียดท้ายหน้า</a></p>
+
+  <form class="ctl" onsubmit="return false">
+    <label>ข้อมูล <select id="mode"><option value="month">Median รายเดือน</option><option value="day">รายวัน</option></select></label>
+    <label>เดือน <select id="month"><option value="0">มกราคม</option><option value="1">กุมภาพันธ์</option><option value="2">มีนาคม</option><option value="3">เมษายน</option><option value="4">พฤษภาคม</option><option value="5">มิถุนายน</option></select></label>
+    <label id="dayField" hidden>วันที่ <select id="day"></select></label>
+    <label>ระยะเส้น <select id="step"><option value="2">2 TECU</option><option value="5">5 TECU</option><option value="10">10 TECU</option></select></label>
+    <label>กราฟ <select id="pair"><option value="0">THLB และ PHMM</option><option value="1">THKC และ PHDV</option><option value="2">ทั้ง 4 สถานี</option></select></label>
+  </form>
+  <p class="time">
+    <label for="hour">เวลา</label>
+    <input id="hour" type="range" min="0" max="23" step="1" value="5">
+    <output id="clock" for="hour">05:00 UT</output>
+    <button id="play" type="button" aria-pressed="false">เล่น</button>
+  </p>
+
+  <figure>
+    <div class="cbar"><b>TEC (TECU)</b><div class="cbar-scale"><i id="rampBar"></i><div class="cbar-ticks"><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span></div></div></div>
+    <div class="plot">
+      <div class="yt" id="mapY"></div>
+      <div class="map-wrap" id="mapWrap">
+        <canvas id="field" aria-hidden="true"></canvas>
+        <svg id="mapCoast" viewBox="0 0 800 460" aria-hidden="true"></svg>
+        <canvas id="iso" aria-hidden="true"></canvas>
+        <svg id="mapTop" viewBox="0 0 800 460" role="img" aria-label="แผนที่ contour ของ TEC ค่าที่สถานีอยู่ในตารางที่ 1"></svg>
+        <p class="map-msg" id="mapMsg" hidden>ชั่วโมงนี้มีข้อมูลไม่ถึง 3 สถานี จึงวาด contour ไม่ได้</p>
+      </div>
+      <div class="xt" id="mapX"></div>
+    </div>
+    <figcaption><b>รูปที่ 1</b> <span id="cap1"></span></figcaption>
+  </figure>
+
+  <div class="tbl-wrap">
+    <table>
+      <caption><b>ตารางที่ 1</b> ค่าของแต่ละสถานีที่เวลาที่เลือก</caption>
+      <thead><tr><th scope="col">สถานี</th><th scope="col" class="l">ที่ตั้ง</th><th scope="col">ละติจูด (°N)</th><th scope="col">ลองจิจูด (°E)</th><th scope="col">Dip (°)</th><th scope="col">เวลาสุริยะ</th><th scope="col">TEC (TECU)</th><th scope="col" id="nHead">จำนวนวัน</th></tr></thead>
+      <tbody id="readout"></tbody>
+    </table>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <caption><b>ตารางที่ 2</b> การเปรียบเทียบคู่สถานีไทยและฟิลิปปินส์</caption>
+      <thead><tr><th scope="col">คู่สถานี</th><th scope="col">ΔTEC ชั่วโมงนี้ (TECU)</th><th scope="col">r ของเดือนนี้</th><th scope="col" class="l">เวลาเหลื่อมของเดือนนี้</th></tr></thead>
+      <tbody id="pairs"></tbody>
+    </table>
+  </div>
+
+  <figure>
+    <svg id="chart" height="340" role="img" aria-label="กราฟ TEC ตามเวลา"></svg>
+    <figcaption><b>รูปที่ 2</b> <span id="cap2"></span></figcaption>
+  </figure>
+
+  <figure>
+    <div class="hm-grid" id="hmGrid"></div>
+    <figcaption><b>รูปที่ 3</b> TEC รายชั่วโมงทั้ง 181 วัน ใช้สเกลสีเดียวกับรูปที่ 1 แกนตั้งคือเวลา UT พื้นขาวคือไม่มีข้อมูล คลิกในรูปเพื่อเปิดวันและเวลานั้น</figcaption>
+  </figure>
+
+  <div class="tbl-wrap">
+    <table id="coverage">
+      <caption><b>ตารางที่ 3</b> ความครบถ้วนของข้อมูล (%) จากทุกชั่วโมงในปฏิทิน ตัวหนาคือเดือนที่ต่ำกว่า 50%</caption>
+    </table>
+  </div>
+
+  <h2 id="notes">หมายเหตุ</h2>
+  <ol class="notes">
+    <li>ข้อมูลสร้างจากไฟล์ดิบ iTEC โดยตรงด้วย build_raw.py แทน iTEC-2line-V2.xlsx แต่ละชั่วโมงคือค่าเฉลี่ยของทุกบรรทัดในชั่วโมงนั้น ชั่วโมงที่มีต่ำกว่า 300 บรรทัดจะเว้นว่าง</li>
+    <li>แกนเวลาเป็น UT ทุกเดือนด้วยกฎเดียว ไฟล์ที่พิมพ์ UTC ใช้ค่านั้นตรง ๆ (ไทยตั้งแต่ 2 มีนาคม ฟิลิปปินส์ตั้งแต่ 8 มิถุนายน) ไฟล์ก่อนหน้าถือว่า TIME เป็นเวลาท้องถิ่น คือไทย UT+7 และฟิลิปปินส์ UT+8 กฎข้อหลังเป็นสมมติฐานที่ต้องให้ผู้ทำเฟิร์มแวร์ยืนยัน</li>
+    <li>ฟิลิปปินส์นำไทยครบทุกเดือนทั้งสองคู่ ราว 1 ชั่วโมง ซึ่งเท่ากับส่วนต่างเขตเวลา UTC+8 กับ UTC+7 ไม่ใช่ 1.35 และ 1.75 ชั่วโมงตามลองจิจูด ส่วน GIM ได้ 1.0 ถึง 1.5 และ 1.75 ถึง 2.25 ชั่วโมง ลำดับนี้จึงยังไม่ใช่หลักฐานทางฟิสิกส์</li>
+    <li>เส้น iTEC ขึ้นก่อน GIM ราว 2.5 ถึง 5.75 ชั่วโมง ยอดอยู่ที่ 00 ถึง 05 UT ส่วน GIM อยู่ที่ 04 ถึง 10 UT ความต่างนี้เห็นแม้ในไฟล์ที่พิมพ์ UTC ชัดเจน หน้านี้ไม่เลื่อนเพิ่มเพื่อให้ตรงกัน ค่าต่างจาก GIM เฉลี่ย 15.8 ถึง 23.1 TECU ดูตารางในหน้า <a href="global.html">Global map</a></li>
+    <li>r ระหว่างไทยกับฟิลิปปินส์ได้ 0.89 ที่ UT เดียวกัน และ 0.98 เมื่อเลื่อน 1 ชั่วโมง ส่วน abstract ระบุประมาณ 0.99 แต่หลังตัดรอบรายวันเหลือ 0.02 และ 0.25 ขณะที่ GIM ได้ 0.80 และ 0.64</li>
+    <li>THLB กับ THKC มี r = 1.00 และ PHMM กับ PHDV มี r = 1.00 ทั้งที่แต่ละคู่อยู่ห่างกันหลายร้อยกิโลเมตร สี่สถานีจึงทำตัวเหมือนข้อมูลเพียง 2 ชุด</li>
+    <li>ค่าในไฟล์ดิบซ้ำแบบที่ค่าวัดจริงไม่น่าจะซ้ำ ช่วง 15 นาทีเท่ากับเมื่อวานถึงทศนิยม 5 ตำแหน่ง 79 ถึง 87% และพฤษภาคม 2026 ตรงกับพฤษภาคม 2025 ในช่วงเวลาเดียวกัน 59.6% ที่ PHMM ค่าหลังตัดรอบรายวันไม่ตาม GIM (r ราว 0) และไม่ตอบสนองต่อพายุเดือนมกราคม</li>
+    <li>เดือนมิถุนายนของฟิลิปปินส์รวมเฟิร์มแวร์ 2 รุ่น เส้น median จึงมาจากวันที่ 9 ถึง 30 เป็นหลัก และจุดกึ่งกลางขาขึ้นต่างจากวันที่ 1 ถึง 7 ราว 1.6 ถึง 1.8 ชั่วโมง THKC มีข้อมูลถึงวันที่ 11 มิถุนายน</li>
+    <li>Contour คำนวณด้วย thin-plate spline จากสถานีที่มีข้อมูล เมื่อทดสอบกับ GIM ได้ RMSE ประมาณ 1.4 TECU ในแนวสถานี และประมาณ 7 TECU ในส่วนที่จาง แนวเส้นที่เกือบเหนือใต้เกิดจากการที่ข้อมูลแบ่งเป็น 2 ชุดตามประเทศ ส่วน GIM บริเวณเดียวกันเปลี่ยนตามละติจูดเป็นหลัก</li>
+    <li>พิกัด PHMM และ PHDV แก้จาก abstract แล้ว เพราะเฟิร์มแวร์เก่าพิมพ์ ddmm.mmmm หาร 100 ค่า Dip คำนวณจาก IGRF-14 ที่ความสูง 350 กม. เดือนเมษายน 2026 ซึ่งต่างจาก abstract ทุกสถานี</li>
+    <li>เส้นแผนที่จาก Natural Earth เวลาสุริยะคือ UT + ลองจิจูด/15</li>
+  </ol>
+</div>
+<div class="tip" id="tip" hidden></div>
+<script src="data.js"></script>
+<script src="geo.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

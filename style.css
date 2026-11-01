@@ -1,0 +1,104 @@
+/* Layout: a plain report page. One column of numbered figures and ruled tables on white, set like a Thai research paper. */
+:root {
+  color-scheme:light;
+  --ink:#000; --gray:#555; --link:#0645ad;
+  --s1:#d9773f; --s2:#2e6b2e; --s3:#2f6db5; --s4:#b8860b;
+  --body:"Sarabun","TH Sarabun New",Tahoma,sans-serif;
+  --fig:Arial,Helvetica,sans-serif;
+}
+* { box-sizing:border-box }
+[hidden] { display:none !important }
+body { margin:0; background:#fff; color:var(--ink); font:16.5px/1.6 var(--body) }
+a { color:var(--link) }
+.page { max-width:960px; margin:0 auto; padding-block:28px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)) }
+header { border-bottom:2px solid var(--ink); padding-bottom:10px; margin-bottom:16px }
+h1 { font-size:25px; line-height:1.3; font-weight:700; margin:0 0 6px; text-wrap:balance }
+h2 { font-size:19px; line-height:1.3; font-weight:700; margin:28px 0 8px }
+header p { margin:0 }
+.nav { margin-top:6px }
+.remark { margin:0 0 14px }
+
+.ctl { display:flex; flex-wrap:wrap; gap:6px 20px; margin:0 0 8px }
+select { font:inherit }
+.time { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin:0 0 18px }
+.time input { flex:1 1 200px; min-width:0; margin:0 }
+.time output { font-variant-numeric:tabular-nums; min-width:72px }
+button { font:inherit }
+
+figure { margin:0 0 26px; min-width:0 }
+figcaption { margin-top:8px; font-size:15.5px; line-height:1.5 }
+.cbar { display:flex; align-items:flex-start; gap:10px; margin:0 0 8px 42px; font:12px/14px var(--fig) }
+.cbar b { white-space:nowrap; font-weight:400; font-size:13px }
+.cbar-scale { flex:1; min-width:0 }
+.cbar-scale i { display:block; height:14px; border:1px solid var(--ink) }
+.cbar-ticks { display:flex; justify-content:space-between; margin-top:3px }
+
+.plot { display:grid; grid-template-columns:42px minmax(0,1fr); grid-template-rows:auto 22px }
+.yt { position:relative; font:12px/1 var(--fig) }
+.yt span { position:absolute; right:0; padding-right:8px; transform:translateY(-50%); white-space:nowrap }
+.yt span::after { content:""; position:absolute; right:0; top:50%; width:5px; border-top:1px solid var(--ink) }
+.xt { position:relative; grid-column:2; font:12px/1 var(--fig) }
+.xt span { position:absolute; top:0; padding-top:8px; transform:translateX(-50%); white-space:nowrap }
+.xt span::before { content:""; position:absolute; top:0; left:50%; height:5px; border-left:1px solid var(--ink) }
+
+.map-wrap { position:relative; width:100%; aspect-ratio:800/460; overflow:hidden; background:#fff; outline:1px solid var(--ink); cursor:crosshair; touch-action:pan-y }
+.map-wrap svg, .map-wrap canvas { position:absolute; inset:0; width:100%; height:100% }
+.coast { fill:none; stroke:var(--ink); stroke-width:.8 }
+.hull { fill:none; stroke:var(--ink); stroke-width:.7; stroke-dasharray:2 3 }
+.st-dot { fill:var(--ink); stroke:#fff; stroke-width:1 }
+.st-dot.none { fill:#fff; stroke:var(--ink) }
+.st-lab { font:12.5px var(--fig); fill:var(--ink); text-anchor:middle; paint-order:stroke; stroke:#fff; stroke-width:3px; stroke-linejoin:round }
+.map-msg { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); margin:0; padding:4px 10px; background:#fff; border:1px solid var(--ink); text-align:center }
+
+.tbl-wrap { overflow-x:auto; margin:0 0 22px }
+table { border-collapse:collapse; width:100%; border-top:2px solid var(--ink); border-bottom:2px solid var(--ink); font-size:15.5px }
+caption { caption-side:top; text-align:left; padding-bottom:6px }
+th { font-weight:600; text-align:right; padding:3px 10px; border-bottom:1px solid var(--ink); white-space:nowrap }
+td { text-align:right; padding:2px 10px; font-variant-numeric:tabular-nums; white-space:nowrap }
+th:first-child, td:first-child { text-align:left; padding-left:2px }
+th.l, td.l { text-align:left }
+td.low { font-weight:700 }
+
+#chart { width:100%; display:block; touch-action:pan-y }
+.tk { font:12px var(--fig); fill:var(--ink) }
+.ax { font:13px var(--fig); fill:var(--ink) }
+
+.hm-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 20px }
+.hm h3 { font:13px var(--fig); margin:0 0 3px 22px }
+.hm-box { position:relative; padding-left:22px }
+.hm-box canvas { display:block; width:100%; height:92px; image-rendering:pixelated; outline:1px solid var(--ink); cursor:crosshair; touch-action:pan-y }
+.hm-y { position:absolute; left:0; top:0; width:18px; height:92px; display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; font:11px/1 var(--fig) }
+.hm-mark { position:absolute; outline:1.5px solid #fff; box-shadow:0 0 0 1px #000; pointer-events:none; min-width:2px; min-height:2px }
+.hm-x { position:relative; height:16px; margin-left:22px; font:11px var(--fig) }
+.hm-x span { position:absolute; top:2px }
+
+.gl-grid { display:grid; grid-template-columns:42px minmax(0,1fr) minmax(0,1fr); gap:8px 8px }
+.gl-cell { grid-column:3; position:relative; min-width:0 }
+.gl-cell:nth-child(odd) { grid-column:1 / 3; padding-left:50px }
+.gl-y { position:absolute; left:0; top:0; width:42px; bottom:0; display:none; font:12px/1 var(--fig) }
+.gl-cell:nth-child(odd) .gl-y { display:block }
+.gl-y span { position:absolute; right:0; padding-right:8px; transform:translateY(-50%); white-space:nowrap }
+.gl-y span::after { content:""; position:absolute; right:0; top:50%; width:5px; border-top:1px solid var(--ink) }
+.gl-map { position:relative; width:100%; aspect-ratio:360/175; outline:1px solid var(--ink); overflow:hidden }
+.gl-map canvas { display:block; width:100%; height:100%; cursor:crosshair; touch-action:pan-y }
+.gl-tag { position:absolute; left:7px; top:4px; color:#fff; font:15px/1.2 var(--fig); text-shadow:0 0 2px #000,0 0 2px #000; pointer-events:none }
+.gl-x { position:relative; height:22px; font:12px/1 var(--fig); display:none }
+.gl-cell:nth-last-child(-n+2) .gl-x { display:block }
+.gl-x span { position:absolute; top:0; padding-top:8px; transform:translateX(-50%); white-space:nowrap }
+.gl-x span::before { content:""; position:absolute; top:0; left:50%; height:5px; border-left:1px solid var(--ink) }
+
+.notes { margin:0; padding-left:22px; display:grid; gap:4px; max-width:75ch }
+.tip { position:fixed; z-index:20; pointer-events:none; background:#fff; color:var(--ink); border:1px solid var(--ink); padding:3px 7px; font:12px/1.4 var(--fig) }
+.tip h4 { font:inherit; margin:0 }
+.tip div { display:flex; gap:12px; justify-content:space-between }
+
+@media (max-width:560px) {
+  h1 { font-size:21px }
+  .gl-grid { grid-template-columns:42px minmax(0,1fr) }
+  .gl-cell, .gl-cell:nth-child(odd) { grid-column:1 / -1; padding-left:50px }
+  .gl-cell .gl-y { display:block }
+  .gl-cell:nth-last-child(2) .gl-x { display:none }
+  .cbar { margin-left:0 }
+  .hm-grid { grid-template-columns:minmax(0,1fr) }
+}

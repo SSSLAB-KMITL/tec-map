@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Global TEC Maps, January to June 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>Ionospheric TEC Consistency between Thailand and Philippines from Paired GPS Observations</h1>
+    <p>แผนที่ TEC ทั่วโลกจาก GIM ของ UPC (UQRG) เดือนมกราคมถึงมิถุนายน 2026</p>
+    <p class="nav"><a href="index.html">Contour map</a> | <b>Global map</b></p>
+  </header>
+
+  <p class="remark"><b>หมายเหตุ</b> แผนที่ในหน้านี้มาจาก GIM ส่วนค่า iTEC ที่นำมาเทียบเป็นค่าที่เครื่องบันทึก ซึ่งมีลักษณะเป็นตารางตามเดือนและเวลา ไม่ใช่ TEC ที่ยืนยันว่าวัดได้ จึงยังไม่ควรใช้เป็นผลการศึกษา ดู<a href="index.html#notes">รายละเอียด</a></p>
+
+  <form class="ctl" onsubmit="return false">
+    <label>แสดง <select id="metric"><option value="mae">MAE เทียบ median รายเดือน</option><option value="tec">TEC ตามเวลา</option></select></label>
+  </form>
+  <p class="time" id="timeRow" hidden>
+    <label for="hour">เวลา</label>
+    <input id="hour" type="range" min="0" max="23" step="1" value="8">
+    <output id="clock" for="hour">08:00 UT</output>
+    <button id="play" type="button" aria-pressed="false">เล่น</button>
+  </p>
+
+  <figure>
+    <div class="cbar"><b id="barTitle">MAE (TECU)</b><div class="cbar-scale"><i id="barFill"></i><div class="cbar-ticks" id="barTicks"></div></div></div>
+    <div class="gl-grid" id="glGrid"></div>
+    <figcaption><b>รูปที่ 1</b> <span id="cap1"></span></figcaption>
+  </figure>
+
+  <div class="tbl-wrap">
+    <table id="checkTbl">
+      <caption><b>ตารางที่ 1</b> MAE รายเดือน (TECU) ระหว่างค่า iTEC จากไฟล์ดิบกับ GIM ที่พิกัดสถานี bias คือ iTEC ลบ GIM</caption>
+    </table>
+  </div>
+
+  <div class="tbl-wrap">
+    <table id="pairTbl">
+      <caption><b>ตารางที่ 2</b> ค่า r ระหว่างสถานีที่เวลา UT เดียวกัน ใช้เฉพาะชั่วโมงที่ทั้งสองสถานีมีข้อมูล</caption>
+    </table>
+  </div>
+
+  <h2>หมายเหตุ</h2>
+  <ol class="notes">
+    <li>ภาพต้นแบบจากงานวิจัยเทียบแบบจำลองกับ GIM แต่งานนี้ไม่มีแบบจำลอง MAE ในรูปที่ 1 จึงเป็นค่าเฉลี่ยของ |TEC รายชั่วโมง − median ของเดือนที่ชั่วโมงเดียวกัน| ซึ่งบอกความแปรผันรายวัน ไม่ใช่ความคลาดเคลื่อนของแบบจำลอง</li>
+    <li>"หลังตัดรอบรายวัน" ในตารางที่ 2 คือการลบ median รายเดือนของแต่ละชั่วโมงออกก่อนคำนวณ r</li>
+    <li>GIM ความละเอียด 2.5° × 5° และถูกปรับให้เรียบ จึงใช้ตรวจแนวโน้มและเวลาได้ แต่ไม่ใช่ค่าจริงสมบูรณ์ทุกจุด ค่า r ของ GIM อาจสูงกว่าความจริงบ้าง</li>
+    <li>เส้นชายฝั่งจาก Natural Earth</li>
+  </ol>
+</div>
+<div class="tip" id="tip" hidden></div>
+<script src="data.js"></script>
+<script src="gim.js"></script>
+<script src="land.js"></script>
+<script src="global.js"></script>
+</body>
+</html>
