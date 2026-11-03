@@ -47,13 +47,14 @@ function bridge(y,wrap){ const z=[...y], n=y.length, at=j=>wrap?y[(j+n)%n]:(j>=0
 function smooth(y,wrap){ const z=bridge(y,wrap); return z.map((v,q)=>{ if(v==null) return null; let s=0,w=0;
   KERNEL.forEach((k,i)=>{ let j=q+i-4; if(wrap) j=(j+NQ)%NQ; const x=z[j]; if(x!=null){s+=k*x;w+=k;} }); return s/w; }); }
 const rawMed = (id,m) => Array.from({length:NQ},(_,q)=>D.med15[id][q][m]);
-// The (2) page's monthly curves are already smooth trend fits, so it sets TEC_MONTH_SMOOTH = false.
-const SMOOTH_MED = Object.fromEntries(ST.map(s=>[s.id,MONTHS.map((_,m)=>window.TEC_MONTH_SMOOTH===false?rawMed(s.id,m):smooth(rawMed(s.id,m),true))]));
+// The (2) page's curves are already smooth trend fits, so it sets TEC_SMOOTH = false.
+const NO_SMOOTH = window.TEC_SMOOTH===false;
+const SMOOTH_MED = Object.fromEntries(ST.map(s=>[s.id,MONTHS.map((_,m)=>NO_SMOOTH?rawMed(s.id,m):smooth(rawMed(s.id,m),true))]));
 // Optional GIM reference (the (2) page): monthly median GIM per slot, drawn dotted in Figure 2.
 const GIM_REF = D.gimMed15 ? Object.fromEntries(ST.map(s=>[s.id,MONTHS.map((_,m)=>smooth(Array.from({length:NQ},(_,q)=>D.gimMed15[s.id][q][m]),true))])) : null;
 const medCurve = (id,m) => SMOOTH_MED[id][m];
 const dayCache = {};
-const dayCurve = (id,i) => dayCache[id+i] ??= smooth(D.daily15[id][i],false);
+const dayCurve = (id,i) => dayCache[id+i] ??= (NO_SMOOTH ? D.daily15[id][i] : smooth(D.daily15[id][i],false));
 const curve = id => state.mode==='month' ? medCurve(id,state.month) : dayCurve(id,state.day);
 const logged = (id,q) => state.mode==='month' ? D.med15[id][q][state.month] : D.daily15[id][state.day][q];
 const val = (id,q) => logged(id,q)==null ? null : curve(id)[q];
