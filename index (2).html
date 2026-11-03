@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>TEC Contour Map (2), GIM at Stations</title>
+<title>TEC Contour Map (2), Aligned to GIM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap">
@@ -13,11 +13,11 @@
 <div class="page">
   <header>
     <h1>Ionospheric TEC Consistency between Thailand and Philippines from Paired GPS Observations</h1>
-    <p>(2) GIM (UQRG) ที่พิกัด 4 สถานี เดือนมกราคมถึงมิถุนายน 2026</p>
-    <p class="nav"><a href="index.html">Contour map</a> | <b>Contour map (2) GIM</b> | <a href="global.html">Global map</a></p>
+    <p>(2) trend ของ GPS TEC จาก 4 สถานี ปรับเวลาให้ตรงกับ GIM (UQRG) เดือนมกราคมถึงมิถุนายน 2026</p>
+    <p class="nav"><a href="index.html">Contour map</a> | <b>Contour map (2)</b> | <a href="global.html">Global map</a></p>
   </header>
 
-  <p class="remark"><b>หน้านี้คือฉบับ (2)</b> ทุกเส้น ทุกสี และทุกตารางในหน้านี้ใช้ค่า GIM (UQRG) ที่พิกัดของ 4 สถานี ไม่ใช่ค่าที่เครื่อง iTEC บันทึก เส้นจึงตาม trend ของ GIM ทั้งหมด ค่าจากเครื่องอยู่ในหน้า <a href="index.html">Contour map</a> เดิม ดู<a href="#notes">รายละเอียดท้ายหน้า</a></p>
+  <p class="remark"><b>หน้านี้คือฉบับ (2)</b> เส้นของแต่ละสถานีคือ trend รายวันของสถานีนั้น และปรับเวลาให้ตรงกับ GIM โดยเลื่อนสองสถานีในคู่เท่ากัน เวลา UT ในหน้านี้จึงไม่ใช่เวลาที่เครื่องบันทึก เส้นประถี่ในรูปที่ 2 คือ GIM ค่าตามเวลาที่บันทึกอยู่ในหน้า <a href="index.html">Contour map</a> เดิม ค่าที่บันทึกยังมีลักษณะเป็นตารางตามเดือนและเวลา จึงยังไม่ควรใช้เป็นผลการศึกษา ดู<a href="#notes">รายละเอียดท้ายหน้า</a></p>
 
   <form class="ctl" onsubmit="return false">
     <label>ข้อมูล <select id="mode"><option value="month">Median รายเดือน</option><option value="day">รายวัน</option></select></label>
@@ -72,7 +72,12 @@
 
   <figure>
     <div class="hm-grid" id="hmGrid"></div>
-    <figcaption><b>รูปที่ 3</b> GIM ราย 15 นาทีทั้ง 181 วัน ใช้สเกลสีเดียวกับรูปที่ 1 แกนตั้งคือเวลา UT พื้นขาวคือไม่มีข้อมูล คลิกในรูปเพื่อเปิดวันและเวลานั้น</figcaption>
+    <figcaption><b>รูปที่ 3</b> TEC ราย 15 นาทีที่บันทึกทั้ง 181 วัน เลื่อนเวลาเท่ากับเส้น trend ของเดือนนั้น ใช้สเกลสีเดียวกับรูปที่ 1 แกนตั้งคือเวลา UT ที่ปรับแล้ว พื้นขาวคือไม่มีข้อมูล คลิกในรูปเพื่อเปิดวันและเวลานั้น</figcaption>
+  </figure>
+
+  <figure>
+    <img src="delta_tec_heatmap%20(2).png" alt="ΔTEC ไทยลบฟิลิปปินส์รายชั่วโมงแต่ละเดือน แถวบนจาก trend ของสถานีที่ปรับเวลาตาม GIM แถวล่างจาก GIM" style="display:block;width:100%;height:auto">
+    <figcaption><b>รูปที่ 4</b> ΔTEC ไทยลบฟิลิปปินส์ แต่ละช่องคือค่าเฉลี่ยรายชั่วโมง แถวบนมาจากเส้น trend ชุดเดียวกับรูปที่ 2 แถวล่างมาจาก GIM สีแดงคือไทยสูงกว่า สีฟ้าคือฟิลิปปินส์สูงกว่า (fig08 (2))</figcaption>
   </figure>
 
   <div class="tbl-wrap">
@@ -83,16 +88,27 @@
 
   <h2 id="notes">หมายเหตุ</h2>
   <ol class="notes">
-    <li>ค่าในหน้านี้คือ GIM UQRG ของ UPC ที่พิกัดสถานี อ่านจากแผนที่รายชั่วโมงด้วย build_gim.py แล้วแปลงเป็นช่วง 15 นาทีด้วยการประมาณค่าเชิงเส้นระหว่างแผนที่ด้วย build_data_2.py ไม่ได้ใช้ค่าจากเครื่อง iTEC หรือ Excel เส้นในรูปที่ 2 สีบนแผนที่ และค่าในตารางที่ 1 และ 2 ทำให้เรียบด้วย moving average 1 ชั่วโมงสองรอบเหมือนหน้าเดิม ส่วน r และเวลาที่นำในตารางที่ 2 คำนวณจากค่าที่ไม่ได้ทำให้เรียบ</li>
-    <li>ใน GIM ฟิลิปปินส์นำไทยทุกเดือน คู่ THLB และ PHMM นำ 1.0 ถึง 1.5 ชั่วโมง คู่ THKC และ PHDV นำ 1.75 ถึง 2.25 ชั่วโมง ใกล้กับส่วนต่างลองจิจูด 1.35 และ 1.75 ชั่วโมง ส่วนค่าจากเครื่องในหน้าเดิมนำ 1.0 ชั่วโมงทุกเดือนทั้งสองคู่ ซึ่งเท่ากับส่วนต่างเขตเวลา</li>
-    <li>GIM เป็นแบบจำลองระดับโลกบนกริด 2.5° × 5° ค่าที่สถานีได้จากการประมาณค่าในกริด จึงเรียบกว่าค่าวัดในพื้นที่ และไม่ใช่ค่าที่สถานีวัดได้ สถานีที่ห่างกันไม่ถึงช่องกริดจึงมีค่าใกล้กันมาก</li>
-    <li>Contour คำนวณด้วย thin-plate spline จาก 4 จุดนี้ จึงไม่เหมือนแผนที่ GIM เต็มในหน้า <a href="global.html">Global map</a> ซึ่งใช้ทุกจุดกริด</li>
-    <li>เส้นแผนที่จาก Natural Earth เวลาสุริยะคือ UT + ลองจิจูด/15</li>
+    <li>เส้นของสถานีมาจาก median ราย 15 นาทีของค่าที่บันทึกชุดเดียวกับหน้าเดิม แล้ว fit ด้วยคลื่นรายวันคาบ 24 ถึง 4 ชั่วโมง เพื่อให้ได้ trend ของสถานีเอง ค่าที่ fit ได้ต่ำกว่า 0 ตอนกลางคืนตัดเป็น 0 เส้นเหล่านี้ไม่ได้ทำให้เรียบซ้ำ ส่วนโหมดรายวันและรูปที่ 3 ใช้ค่าที่บันทึกโดยตรง ทำให้เรียบด้วย moving average 1 ชั่วโมงสองรอบเหมือนหน้าเดิม ข้อมูลสร้างด้วย build_data_2.py ซึ่งใช้ฟังก์ชันชุดเดียวกับ fig05, fig06 และ fig08 (2)</li>
+    <li>เวลาในหน้านี้ปรับให้ตรงกับ GIM ในแต่ละเดือน สองสถานีในคู่เลื่อนช้าลงเท่ากัน คู่ THLB และ PHMM เดือนมกราคมถึงมิถุนายนเลื่อน +4.25, +4.5, +5.5, +3.5, +3.75, +4 ชั่วโมง คู่ THKC และ PHDV เลื่อน +3.75, +3.75, +4.75, +3, +3, +3.75 ชั่วโมง เวลา UT ในหน้านี้จึงไม่ใช่เวลาที่บันทึก ส่วนช่วงเวลาที่ฟิลิปปินส์นำไทยยังเท่ากับในค่าที่บันทึก</li>
+    <li>ใน trend ฟิลิปปินส์นำไทยทุกเดือนทั้งสองคู่ 0.5 ถึง 1.25 ชั่วโมง (ตารางที่ 2) ใน GIM นำ 1.0 ถึง 1.5 ชั่วโมงในคู่ THLB และ PHMM และ 1.75 ถึง 2.25 ชั่วโมงในคู่ THKC และ PHDV ส่วนค่าที่บันทึกก่อน fit นำ 1.0 ชั่วโมงทุกเดือน ดูหน้าเดิม</li>
+    <li>หน้านี้ไม่ได้ปรับระดับค่า เส้นของสถานีโดยเฉลี่ยต่ำกว่า GIM 2 ถึง 19 TECU แล้วแต่สถานีและเดือน ต่างมากที่สุดช่วงกุมภาพันธ์ถึงเมษายน และน้อยที่สุดในมิถุนายน เดือนมีนาคมยอดของไทยสูงกว่าฟิลิปปินส์ เพราะเป็นระดับที่บันทึกไว้</li>
+    <li>ข้อจำกัดของค่าที่บันทึกในหน้าเดิมยังใช้กับหน้านี้ ค่าซ้ำเป็นตารางตามเดือนและเวลา และสี่สถานีทำตัวเหมือนข้อมูลเพียง 2 ชุดตามประเทศ การ fit และการปรับเวลาไม่ได้แก้ข้อจำกัดนี้</li>
+    <li>GIM คือ UQRG ของ UPC ที่พิกัดสถานี อ่านจากแผนที่รายชั่วโมงแล้วประมาณค่าเชิงเส้นเป็นช่วง 15 นาที GIM เป็นแบบจำลองบนกริด 2.5° × 5° จึงเรียบกว่าค่าวัดในพื้นที่</li>
+    <li>Contour คำนวณด้วย thin-plate spline จาก 4 สถานี เส้นแผนที่จาก Natural Earth เวลาสุริยะคือ UT + ลองจิจูด/15 โดยใช้ UT ที่ปรับแล้ว</li>
   </ol>
 </div>
 <div class="tip" id="tip" hidden></div>
 <script src="data%20(2).js"></script>
-<script>window.TEC_LABEL = "GIM (UQRG) TEC"; window.TEC_YMAX = 100;</script>
+<script>
+  window.TEC_LABEL = "TEC (trend ที่ปรับเวลาตาม GIM)";
+  window.TEC_YMAX = 100;
+  window.TEC_MONTH_SMOOTH = false;
+  window.TEC_STATION_SUFFIX = " (trend)";
+  window.TEC_NO_BAND = true;
+  window.TEC_MONTH_LABEL = "Monthly trend";
+  window.TEC_MONTH_HEAD = "Trend เดือน";
+  window.TEC_CAP2_NOTE = "รายเดือนคือ trend ของสถานีที่ปรับเวลาตาม GIM และเส้นประถี่คือ GIM รายวันคือค่าที่บันทึกซึ่งเลื่อนเวลาเท่ากันและทำให้เรียบ (หมายเหตุ 1 และ 2)";
+</script>
 <script src="geo.js"></script>
 <script src="app.js"></script>
 </body>

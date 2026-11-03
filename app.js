@@ -47,7 +47,10 @@ function bridge(y,wrap){ const z=[...y], n=y.length, at=j=>wrap?y[(j+n)%n]:(j>=0
 function smooth(y,wrap){ const z=bridge(y,wrap); return z.map((v,q)=>{ if(v==null) return null; let s=0,w=0;
   KERNEL.forEach((k,i)=>{ let j=q+i-4; if(wrap) j=(j+NQ)%NQ; const x=z[j]; if(x!=null){s+=k*x;w+=k;} }); return s/w; }); }
 const rawMed = (id,m) => Array.from({length:NQ},(_,q)=>D.med15[id][q][m]);
-const SMOOTH_MED = Object.fromEntries(ST.map(s=>[s.id,MONTHS.map((_,m)=>smooth(rawMed(s.id,m),true))]));
+// The (2) page's monthly curves are already smooth trend fits, so it sets TEC_MONTH_SMOOTH = false.
+const SMOOTH_MED = Object.fromEntries(ST.map(s=>[s.id,MONTHS.map((_,m)=>window.TEC_MONTH_SMOOTH===false?rawMed(s.id,m):smooth(rawMed(s.id,m),true))]));
+// Optional GIM reference (the (2) page): monthly median GIM per slot, drawn dotted in Figure 2.
+const GIM_REF = D.gimMed15 ? Object.fromEntries(ST.map(s=>[s.id,MONTHS.map((_,m)=>smooth(Array.from({length:NQ},(_,q)=>D.gimMed15[s.id][q][m]),true))])) : null;
 const medCurve = (id,m) => SMOOTH_MED[id][m];
 const dayCache = {};
 const dayCurve = (id,i) => dayCache[id+i] ??= smooth(D.daily15[id][i],false);
@@ -264,7 +267,7 @@ const pairNodes=PAIRS.map(([a,b])=>{ const tr=H('tr',null,null,$('pairs')); H('t
   return {d:H('td',null,null,tr),r:H('td',null,null,tr),lag:H('td','l',null,tr)}; });
 function drawTables(){
   const h=state.q;
-  $('nHead').textContent = state.mode==='month' ? 'จำนวนวัน' : 'Median เดือน';
+  $('nHead').textContent = state.mode==='month' ? 'จำนวนวัน' : (window.TEC_MONTH_HEAD||'Median เดือน');
   ST.forEach(s=>{ const r=rows[s.id],v=val(s.id,h); r.lt.textContent=fmtLT(h/4,s.lon); r.v.textContent=v==null?'ไม่มีข้อมูล':v.toFixed(1);
     if(state.mode==='month') r.n.textContent=`${monthVals(s.id,state.month,h).length}/${monthLen[state.month]}`;
     else { const m=D.med15[s.id][h][state.month]==null?null:medCurve(s.id,state.month)[h]; r.n.textContent=m==null?'-':m.toFixed(1); } });
@@ -284,13 +287,15 @@ function drawChart(){
   cw=chart.clientWidth||800; chart.setAttribute('viewBox',`0 0 ${cw} ${CH}`); chart.textContent='';
   const ids=shown(), x0=M.l, x1=cw-M.r, y0=sy(0), y1=sy(TEC_MAX);
   for(let v=20;v<TEC_MAX;v+=20) S('line',{x1:x0,x2:x1,y1:sy(v),y2:sy(v),stroke:'#ddd','stroke-width':1},chart);
-  if(state.mode==='month'&&ids.length===2) ids.forEach(id=>{ const vs=Array.from({length:NQ},(_,h)=>monthVals(id,state.month,h)),
+  const band = state.mode==='month'&&ids.length===2&&!window.TEC_NO_BAND; // the (2) page hides it: its lines are trend fits, the band is from logged days
+  if(band) ids.forEach(id=>{ const vs=Array.from({length:NQ},(_,h)=>monthVals(id,state.month,h)),
       band=p=>smooth(vs.map(a=>a.length?quant(a,p):null),true), q3=band(.75), q1=band(.25), up=[],lo=[];
     for(let h=0;h<NQ;h++) if(q3[h]!=null){up.push(`${sx(h).toFixed(1)},${sy(q3[h]).toFixed(1)}`);lo.unshift(`${sx(h).toFixed(1)},${sy(q1[h]).toFixed(1)}`);}
     if(up.length>1) S('polygon',{points:up.concat(lo).join(' '),fill:`var(${byId[id].c})`,opacity:.22},chart); });
   S('line',{x1:sx(state.q),x2:sx(state.q),y1:y1,y2:y0,stroke:'#888','stroke-width':1},chart);
   ids.forEach(id=>{ const s=byId[id],col=`var(${s.c})`;
     if(state.mode==='day') S('path',{d:pathOf(medCurve(id,state.month)).d,fill:'none',stroke:col,'stroke-width':1,'stroke-dasharray':'1 3'},chart);
+    if(GIM_REF&&state.mode==='month') S('path',{d:pathOf(GIM_REF[id][state.month]).d,fill:'none',stroke:col,'stroke-width':1.2,'stroke-dasharray':'2 3'},chart);
     const {d,solo}=pathOf(curve(id)), line=S('path',{d,fill:'none',stroke:col,'stroke-width':2,'stroke-linejoin':'round'},chart);
     if(s.dash) line.setAttribute('stroke-dasharray',s.dash);
     solo.forEach(h=>S('circle',{cx:sx(h),cy:sy(val(id,h)),r:2.5,fill:col},chart));
@@ -302,14 +307,15 @@ function drawChart(){
   S('text',{x:(x0+x1)/2,y:CH-5,'text-anchor':'middle',class:'ax'},chart).textContent='Time (UT)';
   S('text',{transform:`translate(13,${(y0+y1)/2}) rotate(-90)`,'text-anchor':'middle',class:'ax'},chart).textContent='TEC (TECU)';
   // legend box, as in the group's own TEC plots
-  const items=ids.map(id=>({label:`${id}, ${byId[id].en}`,col:`var(${byId[id].c})`,dash:byId[id].dash}));
-  if(state.mode==='month'&&ids.length===2) items.push({label:'Daily IQR',band:true});
-  if(state.mode==='day') items.push({label:'Monthly median',col:'#000',dash:'1 3'});
-  const bw=148,bh=items.length*18+8,bx=x1-bw-8,by=y1+8;
+  const items=ids.map(id=>({label:`${id}, ${byId[id].en}${state.mode==='month'?(window.TEC_STATION_SUFFIX||''):''}`,col:`var(${byId[id].c})`,dash:byId[id].dash}));
+  if(GIM_REF&&state.mode==='month') ids.forEach(id=>items.push({label:`GIM (UQRG) at ${id}`,col:`var(${byId[id].c})`,dash:'2 3',thin:true}));
+  if(band) items.push({label:'Daily IQR',band:true});
+  if(state.mode==='day') items.push({label:window.TEC_MONTH_LABEL||'Monthly median',col:'#000',dash:'1 3'});
+  const bw=Math.max(148,46+6.4*Math.max(...items.map(it=>it.label.length))),bh=items.length*18+8,bx=x1-bw-8,by=y1+8;
   S('rect',{x:bx,y:by,width:bw,height:bh,fill:'#fff',stroke:'#000','stroke-width':.7},chart);
   items.forEach((it,i)=>{ const ty=by+16+i*18;
     if(it.band) S('rect',{x:bx+8,y:ty-9,width:24,height:9,fill:'#000',opacity:.22},chart);
-    else { const l=S('line',{x1:bx+8,x2:bx+32,y1:ty-4,y2:ty-4,stroke:it.col,'stroke-width':2},chart); if(it.dash) l.setAttribute('stroke-dasharray',it.dash); }
+    else { const l=S('line',{x1:bx+8,x2:bx+32,y1:ty-4,y2:ty-4,stroke:it.col,'stroke-width':it.thin?1.2:2},chart); if(it.dash) l.setAttribute('stroke-dasharray',it.dash); }
     S('text',{x:bx+38,y:ty,class:'tk'},chart).textContent=it.label; });
   const hover=S('line',{x1:0,x2:0,y1:y1,y2:y0,stroke:'#000','stroke-width':.7,visibility:'hidden'},chart);
   const hit=S('rect',{x:x0-12,y:0,width:x1-x0+24,height:y0,fill:'transparent'},chart); hit.style.cursor='crosshair';
@@ -373,7 +379,7 @@ function drawCaptions(){
   const half=monthLen[state.month]/2, few=state.mode==='month'?ST.map(s=>[s.id,monthVals(s.id,state.month,state.q).length]).filter(([,n])=>n<half):[];
   $('cap1').textContent=`แผนที่ contour ของ ${SRC} เวลา ${t} ${when} ระยะเส้น ${state.step} TECU สามเหลี่ยมคือสถานี เส้นประยาวคือเส้นแบ่งกลางวันกับกลางคืน เส้นจุดคือขอบเขตที่ล้อมรอบด้วยสถานี พื้นที่จางอยู่นอกแนวสถานีและไม่ควรอ่านค่า`
     +(few.length?` ค่า median ของ ${few.map(([id,n])=>`${id} มาจากข้อมูลเพียง ${n} วัน`).join(' และ ')}`:'');
-  $('cap2').textContent=`${SRC} ตามเวลา ${when} ทำให้เรียบด้วย moving average 1 ชั่วโมงสองรอบ (หมายเหตุ 1) เส้นตั้งคือเวลาที่เลือก คลิกในกราฟเพื่อเปลี่ยนเวลา`;
+  $('cap2').textContent=`${SRC} ตามเวลา ${when} ${window.TEC_CAP2_NOTE||'ทำให้เรียบด้วย moving average 1 ชั่วโมงสองรอบ (หมายเหตุ 1)'} เส้นตั้งคือเวลาที่เลือก คลิกในกราฟเพื่อเปลี่ยนเวลา`;
 }
 function render(){
   $('clock').textContent=`${fmtUT(state.q)} UT`;
