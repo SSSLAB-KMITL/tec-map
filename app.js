@@ -33,9 +33,26 @@ const monthLen = MONTHS.map((_,m)=>dayMonth.filter(x=>x===m).length);
 const state = { mode:'month', month:3, day:monthStart[3], q:20, pair:0, step:5, playing:null };
 
 /* ---------- value access (q is the 15-minute slot, 0 to 95) ---------- */
-const val = (id,q) => state.mode==='month' ? D.med15[id][q][state.month] : D.daily15[id][state.day][q];
-const curve = id => Array.from({length:NQ},(_,q)=>val(id,q));
-const medCurve = (id,m) => Array.from({length:NQ},(_,q)=>D.med15[id][q][m]);
+// The logged values step about an hour apart. For display, every curve is smoothed the same way for
+// both countries: a 1-hour moving average applied twice (a triangle ±1 h wide). Before that, a gap of
+// at most 30 minutes with data on both sides is bridged by a straight line, so the drawn line does not
+// break; the map and tables still show no value there. Longer gaps stay gaps.
+// The lead and r in Table 2 use the unsmoothed medians (rawMed), and the daily panels stay unsmoothed.
+const KERNEL = [.25,1,2,3,3.5,3,2,1,.25].map(w=>w/16);
+function bridge(y,wrap){ const z=[...y], n=y.length, at=j=>wrap?y[(j+n)%n]:(j>=0&&j<n?y[j]:null);
+  for(let q=0;q<n;q++){ if(y[q]!=null||at(q-1)==null) continue; let e=q; while(e<q+3&&at(e)==null) e++;
+    const a=at(q-1),b=at(e),len=e-q; if(len<=2&&b!=null) for(let k=0;k<len;k++) z[(q+k)%n]=a+(b-a)*(k+1)/(len+1); }
+  return z; }
+function smooth(y,wrap){ const z=bridge(y,wrap); return z.map((v,q)=>{ if(v==null) return null; let s=0,w=0;
+  KERNEL.forEach((k,i)=>{ let j=q+i-4; if(wrap) j=(j+NQ)%NQ; const x=z[j]; if(x!=null){s+=k*x;w+=k;} }); return s/w; }); }
+const rawMed = (id,m) => Array.from({length:NQ},(_,q)=>D.med15[id][q][m]);
+const SMOOTH_MED = Object.fromEntries(ST.map(s=>[s.id,MONTHS.map((_,m)=>smooth(rawMed(s.id,m),true))]));
+const medCurve = (id,m) => SMOOTH_MED[id][m];
+const dayCache = {};
+const dayCurve = (id,i) => dayCache[id+i] ??= smooth(D.daily15[id][i],false);
+const curve = id => state.mode==='month' ? medCurve(id,state.month) : dayCurve(id,state.day);
+const logged = (id,q) => state.mode==='month' ? D.med15[id][q][state.month] : D.daily15[id][state.day][q];
+const val = (id,q) => logged(id,q)==null ? null : curve(id)[q];
 const monthVals = (id,m,q) => { const o=[]; for(let i=monthStart[m];i<monthStart[m]+monthLen[m];i++){const v=D.daily15[id][i][q]; if(v!=null)o.push(v);} return o; };
 const quant = (a,q) => { const s=[...a].sort((x,y)=>x-y), p=(s.length-1)*q, l=Math.floor(p); return l+1<s.length ? s[l]+(s[l+1]-s[l])*(p-l) : s[l]; };
 function pearson(a,b){ const p=a.map((v,i)=>[v,b[i]]).filter(q=>q[0]!=null&&q[1]!=null); const n=p.length; if(n<3)return null;
@@ -249,9 +266,9 @@ function drawTables(){
   $('nHead').textContent = state.mode==='month' ? 'จำนวนวัน' : 'Median เดือน';
   ST.forEach(s=>{ const r=rows[s.id],v=val(s.id,h); r.lt.textContent=fmtLT(h/4,s.lon); r.v.textContent=v==null?'ไม่มีข้อมูล':v.toFixed(1);
     if(state.mode==='month') r.n.textContent=`${monthVals(s.id,state.month,h).length}/${monthLen[state.month]}`;
-    else { const m=D.med15[s.id][h][state.month]; r.n.textContent=m==null?'-':m.toFixed(1); } });
+    else { const m=D.med15[s.id][h][state.month]==null?null:medCurve(s.id,state.month)[h]; r.n.textContent=m==null?'-':m.toFixed(1); } });
   PAIRS.forEach(([a,b],i)=>{ const x=val(a,h),y=val(b,h),n=pairNodes[i]; n.d.textContent=x!=null&&y!=null?fmtSigned(x-y):'ไม่มีข้อมูล';
-    const ca=medCurve(a,state.month),cb=medCurve(b,state.month),r=pearson(ca,cb); n.r.textContent=r==null?'-':r.toFixed(2);
+    const ca=rawMed(a,state.month),cb=rawMed(b,state.month),r=pearson(ca,cb); n.r.textContent=r==null?'-':r.toFixed(2);
     const l=bestLag(ca,cb); n.lag.textContent=l===0?'ไม่เหลื่อม':`ฟิลิปปินส์${l>0?'นำ':'ตาม'} ${Math.abs(l)} ชม.`; });
 }
 
@@ -266,7 +283,9 @@ function drawChart(){
   cw=chart.clientWidth||800; chart.setAttribute('viewBox',`0 0 ${cw} ${CH}`); chart.textContent='';
   const ids=shown(), x0=M.l, x1=cw-M.r, y0=sy(0), y1=sy(80);
   for(const v of [20,40,60]) S('line',{x1:x0,x2:x1,y1:sy(v),y2:sy(v),stroke:'#ddd','stroke-width':1},chart);
-  if(state.mode==='month'&&ids.length===2) ids.forEach(id=>{ const up=[],lo=[]; for(let h=0;h<NQ;h++){const a=monthVals(id,state.month,h); if(a.length){up.push(`${sx(h).toFixed(1)},${sy(quant(a,.75)).toFixed(1)}`);lo.unshift(`${sx(h).toFixed(1)},${sy(quant(a,.25)).toFixed(1)}`);}}
+  if(state.mode==='month'&&ids.length===2) ids.forEach(id=>{ const vs=Array.from({length:NQ},(_,h)=>monthVals(id,state.month,h)),
+      band=p=>smooth(vs.map(a=>a.length?quant(a,p):null),true), q3=band(.75), q1=band(.25), up=[],lo=[];
+    for(let h=0;h<NQ;h++) if(q3[h]!=null){up.push(`${sx(h).toFixed(1)},${sy(q3[h]).toFixed(1)}`);lo.unshift(`${sx(h).toFixed(1)},${sy(q1[h]).toFixed(1)}`);}
     if(up.length>1) S('polygon',{points:up.concat(lo).join(' '),fill:`var(${byId[id].c})`,opacity:.22},chart); });
   S('line',{x1:sx(state.q),x2:sx(state.q),y1:y1,y2:y0,stroke:'#888','stroke-width':1},chart);
   ids.forEach(id=>{ const s=byId[id],col=`var(${s.c})`;
@@ -353,7 +372,7 @@ function drawCaptions(){
   const half=monthLen[state.month]/2, few=state.mode==='month'?ST.map(s=>[s.id,monthVals(s.id,state.month,state.q).length]).filter(([,n])=>n<half):[];
   $('cap1').textContent=`แผนที่ contour ของ TEC เวลา ${t} ${when} ระยะเส้น ${state.step} TECU สามเหลี่ยมคือสถานี เส้นประยาวคือเส้นแบ่งกลางวันกับกลางคืน เส้นจุดคือขอบเขตที่ล้อมรอบด้วยสถานี พื้นที่จางอยู่นอกแนวสถานีและไม่ควรอ่านค่า`
     +(few.length?` ค่า median ของ ${few.map(([id,n])=>`${id} มาจากข้อมูลเพียง ${n} วัน`).join(' และ ')}`:'');
-  $('cap2').textContent=`TEC ตามเวลา ${when} เส้นตั้งคือเวลาที่เลือก คลิกในกราฟเพื่อเปลี่ยนเวลา`;
+  $('cap2').textContent=`TEC ตามเวลา ${when} ทำให้เรียบด้วย moving average 1 ชั่วโมงสองรอบ (หมายเหตุ 1) เส้นตั้งคือเวลาที่เลือก คลิกในกราฟเพื่อเปลี่ยนเวลา`;
 }
 function render(){
   $('clock').textContent=`${fmtUT(state.q)} UT`;
