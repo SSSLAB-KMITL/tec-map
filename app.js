@@ -23,24 +23,26 @@ const H = (tag,cls,text,parent) => { const e=document.createElement(tag); if(cls
 const X = lon => (lon-92)*20, Y = lat => (22-lat)*20;
 const lonOf = i => 92+(i+.5)*40/NX, latOf = j => 22-(j+.5)*23/NY;
 const pad = h => String(h).padStart(2,'0');
+const NQ = 96; // 15-minute slots per day; the logged values step about an hour apart, so hourly means would blur the lead
+const fmtUT = q => pad(Math.floor(q/4))+':'+pad(q%4*15);
 
 const dayMonth = D.days.map(d=>+d.slice(5,7)-1);
 const monthStart = MONTHS.map((_,m)=>dayMonth.indexOf(m));
 const monthLen = MONTHS.map((_,m)=>dayMonth.filter(x=>x===m).length);
 
-const state = { mode:'month', month:3, day:monthStart[3], hour:5, pair:0, step:5, playing:null };
+const state = { mode:'month', month:3, day:monthStart[3], q:20, pair:0, step:5, playing:null };
 
-/* ---------- value access ---------- */
-const val = (id,h) => state.mode==='month' ? D.med[id][h][state.month] : D.daily[id][state.day][h];
-const curve = id => Array.from({length:24},(_,h)=>val(id,h));
-const medCurve = (id,m) => Array.from({length:24},(_,h)=>D.med[id][h][m]);
-const monthVals = (id,m,h) => { const o=[]; for(let i=monthStart[m];i<monthStart[m]+monthLen[m];i++){const v=D.daily[id][i][h]; if(v!=null)o.push(v);} return o; };
+/* ---------- value access (q is the 15-minute slot, 0 to 95) ---------- */
+const val = (id,q) => state.mode==='month' ? D.med15[id][q][state.month] : D.daily15[id][state.day][q];
+const curve = id => Array.from({length:NQ},(_,q)=>val(id,q));
+const medCurve = (id,m) => Array.from({length:NQ},(_,q)=>D.med15[id][q][m]);
+const monthVals = (id,m,q) => { const o=[]; for(let i=monthStart[m];i<monthStart[m]+monthLen[m];i++){const v=D.daily15[id][i][q]; if(v!=null)o.push(v);} return o; };
 const quant = (a,q) => { const s=[...a].sort((x,y)=>x-y), p=(s.length-1)*q, l=Math.floor(p); return l+1<s.length ? s[l]+(s[l+1]-s[l])*(p-l) : s[l]; };
 function pearson(a,b){ const p=a.map((v,i)=>[v,b[i]]).filter(q=>q[0]!=null&&q[1]!=null); const n=p.length; if(n<3)return null;
   const mx=p.reduce((s,q)=>s+q[0],0)/n,my=p.reduce((s,q)=>s+q[1],0)/n; let xy=0,xx=0,yy=0;
   for(const [x,y] of p){xy+=(x-mx)*(y-my);xx+=(x-mx)**2;yy+=(y-my)**2;} return xy/Math.sqrt(xx*yy); }
-const interp = (y,h) => { const t=((h%24)+24)%24,i=Math.floor(t),f=t-i; return y[i]*(1-f)+y[(i+1)%24]*f; };
-function bestLag(a,b){ let best=0,br=-2; for(let l=-6;l<=6;l+=.25){ const r=pearson(a,a.map((_,h)=>interp(b,h-l))); if(r>br){br=r;best=l;} } return best; }
+// hours by which curve b (Philippines) leads curve a (Thailand), searched in 15-minute steps over ±6 h
+function bestLag(a,b){ let best=0,br=-2; for(let l=-24;l<=24;l++){ const r=pearson(a,a.map((_,q)=>b[((q-l)%NQ+NQ)%NQ])); if(r!=null&&r>br){br=r;best=l;} } return best/4; }
 
 /* ---------- colour: jet, as in published TEC maps ---------- */
 const clamp01 = v => Math.max(0,Math.min(1,v));
@@ -126,7 +128,7 @@ const doy = iso => Math.round((Date.parse(iso+'T00:00:00Z')-Date.UTC(2026,0,0))/
 const curDate = () => state.mode==='month' ? D.days[monthStart[state.month]+14] : D.days[state.day];
 const decl = n => -23.44*Math.cos(2*Math.PI*(n+10)/365);
 const rad = Math.PI/180;
-function sunElevation(lat,lon,d){ const ha=(state.hour-12)*15+lon;
+function sunElevation(lat,lon,d){ const ha=(state.q/4-12)*15+lon;
   return Math.asin(Math.sin(lat*rad)*Math.sin(d*rad)+Math.cos(lat*rad)*Math.cos(d*rad)*Math.cos(ha*rad))/rad; }
 
 /* ---------- map layers ---------- */
@@ -145,7 +147,7 @@ const F=new Float32Array(NX*NY);
 let current=null; // spline model for the frame on screen, null when too few stations report
 
 function drawField(){
-  const h=state.hour, ids=ST.map(s=>s.id).filter(id=>val(id,h)!=null), ctx=fieldCv.getContext('2d');
+  const h=state.q, ids=ST.map(s=>s.id).filter(id=>val(id,h)!=null), ctx=fieldCv.getContext('2d');
   $('mapMsg').hidden=ids.length>=3;
   if(ids.length<3){ current=null; ctx.clearRect(0,0,NX,NY); hullEl.setAttribute('points',''); return; }
   const m=current=model(ids), n=m.n, vals=ids.map(id=>val(id,h)), img=ctx.createImageData(NX,NY), d=img.data;
@@ -216,7 +218,7 @@ function drawTerminator(ctx,w,h){
 }
 
 function drawStations(){
-  ST.forEach(s=>{ const v=val(s.id,state.hour),{dot,label}=stEls[s.id];
+  ST.forEach(s=>{ const v=val(s.id,state.q),{dot,label}=stEls[s.id];
     dot.classList.toggle('none',v==null);
     label.textContent = v==null ? `${s.id} no data` : `${s.id} ${v.toFixed(1)}`; });
 }
@@ -243,11 +245,11 @@ ST.forEach(s=>{ const tr=H('tr',null,null,$('readout')); H('td',null,s.id,tr); H
 const pairNodes=PAIRS.map(([a,b])=>{ const tr=H('tr',null,null,$('pairs')); H('td',null,`${a} และ ${b}`,tr);
   return {d:H('td',null,null,tr),r:H('td',null,null,tr),lag:H('td','l',null,tr)}; });
 function drawTables(){
-  const h=state.hour;
+  const h=state.q;
   $('nHead').textContent = state.mode==='month' ? 'จำนวนวัน' : 'Median เดือน';
-  ST.forEach(s=>{ const r=rows[s.id],v=val(s.id,h); r.lt.textContent=fmtLT(h,s.lon); r.v.textContent=v==null?'ไม่มีข้อมูล':v.toFixed(1);
+  ST.forEach(s=>{ const r=rows[s.id],v=val(s.id,h); r.lt.textContent=fmtLT(h/4,s.lon); r.v.textContent=v==null?'ไม่มีข้อมูล':v.toFixed(1);
     if(state.mode==='month') r.n.textContent=`${monthVals(s.id,state.month,h).length}/${monthLen[state.month]}`;
-    else { const m=D.med[s.id][h][state.month]; r.n.textContent=m==null?'-':m.toFixed(1); } });
+    else { const m=D.med15[s.id][h][state.month]; r.n.textContent=m==null?'-':m.toFixed(1); } });
   PAIRS.forEach(([a,b],i)=>{ const x=val(a,h),y=val(b,h),n=pairNodes[i]; n.d.textContent=x!=null&&y!=null?fmtSigned(x-y):'ไม่มีข้อมูล';
     const ca=medCurve(a,state.month),cb=medCurve(b,state.month),r=pearson(ca,cb); n.r.textContent=r==null?'-':r.toFixed(2);
     const l=bestLag(ca,cb); n.lag.textContent=l===0?'ไม่เหลื่อม':`ฟิลิปปินส์${l>0?'นำ':'ตาม'} ${Math.abs(l)} ชม.`; });
@@ -257,26 +259,26 @@ function drawTables(){
 const chart=$('chart');
 const M={l:50,r:12,t:8,b:44}, CH=340;
 let cw=800;
-const sx=h=>M.l+h/23*(cw-M.l-M.r), sy=v=>M.t+(1-v/80)*(CH-M.t-M.b);
+const sx=q=>M.l+q/(NQ-1)*(cw-M.l-M.r), sy=v=>M.t+(1-v/80)*(CH-M.t-M.b);
 const shown=()=>state.pair===2?ST.map(s=>s.id):PAIRS[state.pair];
 function pathOf(y){ let d='',pen=false,solo=[]; y.forEach((v,h)=>{ if(v==null){pen=false;return;} d+=(pen?'L':'M')+sx(h).toFixed(1)+','+sy(v).toFixed(1); const prev=y[h-1],next=y[h+1]; if(prev==null&&next==null)solo.push(h); pen=true; }); return {d,solo}; }
 function drawChart(){
   cw=chart.clientWidth||800; chart.setAttribute('viewBox',`0 0 ${cw} ${CH}`); chart.textContent='';
   const ids=shown(), x0=M.l, x1=cw-M.r, y0=sy(0), y1=sy(80);
   for(const v of [20,40,60]) S('line',{x1:x0,x2:x1,y1:sy(v),y2:sy(v),stroke:'#ddd','stroke-width':1},chart);
-  if(state.mode==='month'&&ids.length===2) ids.forEach(id=>{ const up=[],lo=[]; for(let h=0;h<24;h++){const a=monthVals(id,state.month,h); if(a.length){up.push(`${sx(h).toFixed(1)},${sy(quant(a,.75)).toFixed(1)}`);lo.unshift(`${sx(h).toFixed(1)},${sy(quant(a,.25)).toFixed(1)}`);}}
+  if(state.mode==='month'&&ids.length===2) ids.forEach(id=>{ const up=[],lo=[]; for(let h=0;h<NQ;h++){const a=monthVals(id,state.month,h); if(a.length){up.push(`${sx(h).toFixed(1)},${sy(quant(a,.75)).toFixed(1)}`);lo.unshift(`${sx(h).toFixed(1)},${sy(quant(a,.25)).toFixed(1)}`);}}
     if(up.length>1) S('polygon',{points:up.concat(lo).join(' '),fill:`var(${byId[id].c})`,opacity:.22},chart); });
-  S('line',{x1:sx(state.hour),x2:sx(state.hour),y1:y1,y2:y0,stroke:'#888','stroke-width':1},chart);
+  S('line',{x1:sx(state.q),x2:sx(state.q),y1:y1,y2:y0,stroke:'#888','stroke-width':1},chart);
   ids.forEach(id=>{ const s=byId[id],col=`var(${s.c})`;
     if(state.mode==='day') S('path',{d:pathOf(medCurve(id,state.month)).d,fill:'none',stroke:col,'stroke-width':1,'stroke-dasharray':'1 3'},chart);
     const {d,solo}=pathOf(curve(id)), line=S('path',{d,fill:'none',stroke:col,'stroke-width':2,'stroke-linejoin':'round'},chart);
     if(s.dash) line.setAttribute('stroke-dasharray',s.dash);
     solo.forEach(h=>S('circle',{cx:sx(h),cy:sy(val(id,h)),r:2.5,fill:col},chart));
-    const v=val(id,state.hour); if(v!=null) S('circle',{cx:sx(state.hour),cy:sy(v),r:3.5,fill:col},chart); });
+    const v=val(id,state.q); if(v!=null) S('circle',{cx:sx(state.q),cy:sy(v),r:3.5,fill:col},chart); });
   S('rect',{x:x0,y:y1,width:x1-x0,height:y0-y1,fill:'none',stroke:'#000','stroke-width':1},chart);
   for(const v of [0,20,40,60,80]){ S('line',{x1:x0-5,x2:x0,y1:sy(v),y2:sy(v),stroke:'#000'},chart); S('text',{x:x0-8,y:sy(v)+4,'text-anchor':'end',class:'tk'},chart).textContent=v; }
   const ticks=cw<520?6:3;
-  for(let h=0;h<24;h+=ticks){ S('line',{x1:sx(h),x2:sx(h),y1:y0,y2:y0+5,stroke:'#000'},chart); S('text',{x:sx(h),y:y0+19,'text-anchor':'middle',class:'tk'},chart).textContent=h; }
+  for(let h=0;h<24;h+=ticks){ S('line',{x1:sx(h*4),x2:sx(h*4),y1:y0,y2:y0+5,stroke:'#000'},chart); S('text',{x:sx(h*4),y:y0+19,'text-anchor':'middle',class:'tk'},chart).textContent=h; }
   S('text',{x:(x0+x1)/2,y:CH-5,'text-anchor':'middle',class:'ax'},chart).textContent='Time (UT)';
   S('text',{transform:`translate(13,${(y0+y1)/2}) rotate(-90)`,'text-anchor':'middle',class:'ax'},chart).textContent='TEC (TECU)';
   // legend box, as in the group's own TEC plots
@@ -291,11 +293,11 @@ function drawChart(){
     S('text',{x:bx+38,y:ty,class:'tk'},chart).textContent=it.label; });
   const hover=S('line',{x1:0,x2:0,y1:y1,y2:y0,stroke:'#000','stroke-width':.7,visibility:'hidden'},chart);
   const hit=S('rect',{x:x0-12,y:0,width:x1-x0+24,height:y0,fill:'transparent'},chart); hit.style.cursor='crosshair';
-  const pick=ev=>{const b=chart.getBoundingClientRect(); return Math.max(0,Math.min(23,Math.round((ev.clientX-b.left-M.l)/(cw-M.l-M.r)*23)));};
+  const pick=ev=>{const b=chart.getBoundingClientRect(); return Math.max(0,Math.min(NQ-1,Math.round((ev.clientX-b.left-M.l)/(cw-M.l-M.r)*(NQ-1))));};
   hit.addEventListener('pointermove',ev=>{ const h=pick(ev); hover.setAttribute('x1',sx(h)); hover.setAttribute('x2',sx(h)); hover.setAttribute('visibility','visible');
-    showTip(ev,`${pad(h)}:00 UT`,ids.map(id=>({name:id,v:val(id,h)}))); });
+    showTip(ev,`${fmtUT(h)} UT`,ids.map(id=>({name:id,v:val(id,h)}))); });
   hit.addEventListener('pointerleave',()=>{hover.setAttribute('visibility','hidden');hideTip();});
-  hit.addEventListener('click',ev=>{stopPlay();state.hour=pick(ev);$('hour').value=state.hour;render();});
+  hit.addEventListener('click',ev=>{stopPlay();state.q=pick(ev);$('hour').value=state.q;render();});
 }
 
 /* ---------- tooltip ---------- */
@@ -310,22 +312,22 @@ function hideTip(){tip.hidden=true;}
 const hm={}, NDAYS=D.days.length;
 ST.forEach(s=>{ const box=H('div','hm',null,$('hmGrid')); H('h3',null,`${s.id}, ${s.en}`,box);
   const box2=H('div','hm-box',null,box), y=H('div','hm-y',null,box2); ['0','12','23'].forEach(v=>H('span',null,v,y));
-  const cv=H('canvas',null,null,box2); cv.width=NDAYS; cv.height=24; cv.setAttribute('role','img'); cv.setAttribute('aria-label',`TEC รายวันของ ${s.id} ความครบถ้วนอยู่ในตารางที่ 3`);
+  const cv=H('canvas',null,null,box2); cv.width=NDAYS; cv.height=NQ; cv.setAttribute('role','img'); cv.setAttribute('aria-label',`TEC รายวันของ ${s.id} ความครบถ้วนอยู่ในตารางที่ 3`);
   const mark=H('div','hm-mark',null,box2);
   const xr=H('div','hm-x',null,box); MONTHS_EN.forEach((m,i)=>{H('span',null,m,xr).style.left=(monthStart[i]/NDAYS*100)+'%';});
-  const at=ev=>{const b=cv.getBoundingClientRect(); return {i:Math.max(0,Math.min(NDAYS-1,Math.floor((ev.clientX-b.left)/b.width*NDAYS))),h:Math.max(0,Math.min(23,Math.floor((ev.clientY-b.top)/b.height*24)))};};
-  cv.addEventListener('pointermove',ev=>{const {i,h}=at(ev); showTip(ev,`${D.days[i]}, ${pad(h)}:00 UT`,[{name:s.id,v:D.daily[s.id][i][h]}]);});
+  const at=ev=>{const b=cv.getBoundingClientRect(); return {i:Math.max(0,Math.min(NDAYS-1,Math.floor((ev.clientX-b.left)/b.width*NDAYS))),h:Math.max(0,Math.min(NQ-1,Math.floor((ev.clientY-b.top)/b.height*NQ)))};};
+  cv.addEventListener('pointermove',ev=>{const {i,h}=at(ev); showTip(ev,`${D.days[i]}, ${fmtUT(h)} UT`,[{name:s.id,v:D.daily15[s.id][i][h]}]);});
   cv.addEventListener('pointerleave',hideTip);
-  cv.addEventListener('click',ev=>{const {i,h}=at(ev); stopPlay(); state.mode='day'; state.day=i; state.month=dayMonth[i]; state.hour=h; syncControls(); render();});
+  cv.addEventListener('click',ev=>{const {i,h}=at(ev); stopPlay(); state.mode='day'; state.day=i; state.month=dayMonth[i]; state.q=h; syncControls(); render();});
   hm[s.id]={cv,mark}; });
 function paintHeatmaps(){
-  ST.forEach(s=>{ const ctx=hm[s.id].cv.getContext('2d'),img=ctx.createImageData(NDAYS,24);
-    for(let i=0;i<NDAYS;i++)for(let h=0;h<24;h++){const v=D.daily[s.id][i][h],c=v==null?[255,255,255]:tecRgb(v),o=(h*NDAYS+i)*4;img.data.set([c[0],c[1],c[2],255],o);}
+  ST.forEach(s=>{ const ctx=hm[s.id].cv.getContext('2d'),img=ctx.createImageData(NDAYS,NQ);
+    for(let i=0;i<NDAYS;i++)for(let h=0;h<NQ;h++){const v=D.daily15[s.id][i][h],c=v==null?[255,255,255]:tecRgb(v),o=(h*NDAYS+i)*4;img.data.set([c[0],c[1],c[2],255],o);}
     ctx.putImageData(img,0,0); });
 }
 function drawMarks(){ ST.forEach(s=>{ const m=hm[s.id].mark,box=hm[s.id].cv.parentElement,px=(box.clientWidth-22)/NDAYS;
   m.style.left=(22+(state.mode==='month'?monthStart[state.month]:state.day)*px)+'px'; m.style.width=((state.mode==='month'?monthLen[state.month]:1)*px)+'px';
-  m.style.top=(state.hour/24*92)+'px'; m.style.height=(92/24)+'px'; }); }
+  m.style.top=(state.q/NQ*92)+'px'; m.style.height=Math.max(2,92/NQ)+'px'; }); }
 (function coverage(){ const t=$('coverage'),h=H('thead',null,null,t),hr=H('tr',null,null,h); H('th',null,'สถานี',hr).scope='col'; MONTHS.forEach(m=>{H('th',null,m,hr).scope='col';}); H('th',null,'รวม',hr).scope='col';
   const b=H('tbody',null,null,t); ST.forEach(s=>{const tr=H('tr',null,null,b);H('td',null,s.id,tr); MONTHS.forEach((_,m)=>{const a=D.daily[s.id].slice(monthStart[m],monthStart[m]+monthLen[m]).flat(),p=100*a.filter(v=>v!=null).length/a.length;H('td',p<50?'low':null,p.toFixed(0),tr);});
     const a=D.daily[s.id].flat();H('td',null,(100*a.filter(v=>v!=null).length/a.length).toFixed(0),tr);}); })();
@@ -337,24 +339,24 @@ pick('month',v=>{state.month=+v;state.day=monthStart[+v];});
 pick('step',v=>{state.step=+v;buildBands();});
 pick('pair',v=>{state.pair=+v;});
 function fillDays(){ const sel=$('day'); sel.textContent=''; for(let i=monthStart[state.month];i<monthStart[state.month]+monthLen[state.month];i++){const o=H('option',null,fmtDate(D.days[i]),sel);o.value=i;} sel.value=state.day; }
-function syncControls(){ $('mode').value=state.mode; $('month').value=state.month; $('step').value=state.step; $('pair').value=state.pair; $('dayField').hidden=state.mode!=='day'; fillDays(); $('hour').value=state.hour; }
+function syncControls(){ $('mode').value=state.mode; $('month').value=state.month; $('step').value=state.step; $('pair').value=state.pair; $('dayField').hidden=state.mode!=='day'; fillDays(); $('hour').value=state.q; }
 $('day').addEventListener('change',e=>{stopPlay();state.day=+e.target.value;render();});
-$('hour').addEventListener('input',e=>{stopPlay();state.hour=+e.target.value;render();});
+$('hour').addEventListener('input',e=>{stopPlay();state.q=+e.target.value;render();});
 function stopPlay(){ if(state.playing){clearInterval(state.playing);state.playing=null;} const b=$('play');b.textContent='เล่น';b.setAttribute('aria-pressed','false'); }
 $('play').addEventListener('click',()=>{ if(state.playing){stopPlay();return;} const b=$('play');b.textContent='หยุด';b.setAttribute('aria-pressed','true');
-  state.playing=setInterval(()=>{ state.hour=(state.hour+1)%24;
-    if(state.hour===0&&state.mode==='day'){ state.day=(state.day+1)%NDAYS; state.month=dayMonth[state.day]; syncControls(); }
-    $('hour').value=state.hour; render(); },700); });
+  state.playing=setInterval(()=>{ state.q=(state.q+1)%NQ;
+    if(state.q===0&&state.mode==='day'){ state.day=(state.day+1)%NDAYS; state.month=dayMonth[state.day]; syncControls(); }
+    $('hour').value=state.q; render(); },250); });
 
 function drawCaptions(){
-  const t=`${pad(state.hour)}:00 UT`, when=state.mode==='month'?`median เดือน${MONTHS_LONG[state.month]} 2026`:`วันที่ ${fmtDate(D.days[state.day])}`;
-  const half=monthLen[state.month]/2, few=state.mode==='month'?ST.map(s=>[s.id,monthVals(s.id,state.month,state.hour).length]).filter(([,n])=>n<half):[];
+  const t=`${fmtUT(state.q)} UT`, when=state.mode==='month'?`median เดือน${MONTHS_LONG[state.month]} 2026`:`วันที่ ${fmtDate(D.days[state.day])}`;
+  const half=monthLen[state.month]/2, few=state.mode==='month'?ST.map(s=>[s.id,monthVals(s.id,state.month,state.q).length]).filter(([,n])=>n<half):[];
   $('cap1').textContent=`แผนที่ contour ของ TEC เวลา ${t} ${when} ระยะเส้น ${state.step} TECU สามเหลี่ยมคือสถานี เส้นประยาวคือเส้นแบ่งกลางวันกับกลางคืน เส้นจุดคือขอบเขตที่ล้อมรอบด้วยสถานี พื้นที่จางอยู่นอกแนวสถานีและไม่ควรอ่านค่า`
     +(few.length?` ค่า median ของ ${few.map(([id,n])=>`${id} มาจากข้อมูลเพียง ${n} วัน`).join(' และ ')}`:'');
   $('cap2').textContent=`TEC ตามเวลา ${when} เส้นตั้งคือเวลาที่เลือก คลิกในกราฟเพื่อเปลี่ยนเวลา`;
 }
 function render(){
-  $('clock').textContent=`${pad(state.hour)}:00 UT`;
+  $('clock').textContent=`${fmtUT(state.q)} UT`;
   drawField(); drawIso(); drawStations(); drawTables(); drawChart(); drawMarks(); drawCaptions();
 }
 new ResizeObserver(()=>{drawChart();drawMarks();}).observe($('hmGrid'));
