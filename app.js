@@ -11,8 +11,8 @@ const PAIRS = [['THLB','PHMM'],['THKC','PHDV']];
 const MONTHS = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.'];
 const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun'];
 const MONTHS_LONG = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน'];
-const TEC_MAX = 80;     // top of the colour scale
-const FIELD_CLAMP = 90; // spline overshoot outside the stations is cut off here
+const TEC_MAX = window.TEC_YMAX || 80; // top of the colour scale and the chart; the (2) page sets 100
+const FIELD_CLAMP = TEC_MAX + 10; // spline overshoot outside the stations is cut off here
 const NX = 320, NY = 184; // contour grid over 92–132°E, 22°N–1°S
 const FADE_FULL = 2, FADE_ZERO = 8; // degrees outside the station hull where the field fades away
 const FIELD_OPACITY = .95;
@@ -23,6 +23,7 @@ const H = (tag,cls,text,parent) => { const e=document.createElement(tag); if(cls
 const X = lon => (lon-92)*20, Y = lat => (22-lat)*20;
 const lonOf = i => 92+(i+.5)*40/NX, latOf = j => 22-(j+.5)*23/NY;
 const pad = h => String(h).padStart(2,'0');
+const SRC = window.TEC_LABEL || 'TEC'; // the (2) page sets this to name GIM as its source
 const NQ = 96; // 15-minute slots per day; the logged values step about an hour apart, so hourly means would blur the lead
 const fmtUT = q => pad(Math.floor(q/4))+':'+pad(q%4*15);
 
@@ -276,13 +277,13 @@ function drawTables(){
 const chart=$('chart');
 const M={l:50,r:12,t:8,b:44}, CH=340;
 let cw=800;
-const sx=q=>M.l+q/(NQ-1)*(cw-M.l-M.r), sy=v=>M.t+(1-v/80)*(CH-M.t-M.b);
+const sx=q=>M.l+q/(NQ-1)*(cw-M.l-M.r), sy=v=>M.t+(1-v/TEC_MAX)*(CH-M.t-M.b);
 const shown=()=>state.pair===2?ST.map(s=>s.id):PAIRS[state.pair];
 function pathOf(y){ let d='',pen=false,solo=[]; y.forEach((v,h)=>{ if(v==null){pen=false;return;} d+=(pen?'L':'M')+sx(h).toFixed(1)+','+sy(v).toFixed(1); const prev=y[h-1],next=y[h+1]; if(prev==null&&next==null)solo.push(h); pen=true; }); return {d,solo}; }
 function drawChart(){
   cw=chart.clientWidth||800; chart.setAttribute('viewBox',`0 0 ${cw} ${CH}`); chart.textContent='';
-  const ids=shown(), x0=M.l, x1=cw-M.r, y0=sy(0), y1=sy(80);
-  for(const v of [20,40,60]) S('line',{x1:x0,x2:x1,y1:sy(v),y2:sy(v),stroke:'#ddd','stroke-width':1},chart);
+  const ids=shown(), x0=M.l, x1=cw-M.r, y0=sy(0), y1=sy(TEC_MAX);
+  for(let v=20;v<TEC_MAX;v+=20) S('line',{x1:x0,x2:x1,y1:sy(v),y2:sy(v),stroke:'#ddd','stroke-width':1},chart);
   if(state.mode==='month'&&ids.length===2) ids.forEach(id=>{ const vs=Array.from({length:NQ},(_,h)=>monthVals(id,state.month,h)),
       band=p=>smooth(vs.map(a=>a.length?quant(a,p):null),true), q3=band(.75), q1=band(.25), up=[],lo=[];
     for(let h=0;h<NQ;h++) if(q3[h]!=null){up.push(`${sx(h).toFixed(1)},${sy(q3[h]).toFixed(1)}`);lo.unshift(`${sx(h).toFixed(1)},${sy(q1[h]).toFixed(1)}`);}
@@ -295,7 +296,7 @@ function drawChart(){
     solo.forEach(h=>S('circle',{cx:sx(h),cy:sy(val(id,h)),r:2.5,fill:col},chart));
     const v=val(id,state.q); if(v!=null) S('circle',{cx:sx(state.q),cy:sy(v),r:3.5,fill:col},chart); });
   S('rect',{x:x0,y:y1,width:x1-x0,height:y0-y1,fill:'none',stroke:'#000','stroke-width':1},chart);
-  for(const v of [0,20,40,60,80]){ S('line',{x1:x0-5,x2:x0,y1:sy(v),y2:sy(v),stroke:'#000'},chart); S('text',{x:x0-8,y:sy(v)+4,'text-anchor':'end',class:'tk'},chart).textContent=v; }
+  for(let v=0;v<=TEC_MAX;v+=20){ S('line',{x1:x0-5,x2:x0,y1:sy(v),y2:sy(v),stroke:'#000'},chart); S('text',{x:x0-8,y:sy(v)+4,'text-anchor':'end',class:'tk'},chart).textContent=v; }
   const ticks=cw<520?6:3;
   for(let h=0;h<24;h+=ticks){ S('line',{x1:sx(h*4),x2:sx(h*4),y1:y0,y2:y0+5,stroke:'#000'},chart); S('text',{x:sx(h*4),y:y0+19,'text-anchor':'middle',class:'tk'},chart).textContent=h; }
   S('text',{x:(x0+x1)/2,y:CH-5,'text-anchor':'middle',class:'ax'},chart).textContent='Time (UT)';
@@ -370,9 +371,9 @@ $('play').addEventListener('click',()=>{ if(state.playing){stopPlay();return;} c
 function drawCaptions(){
   const t=`${fmtUT(state.q)} UT`, when=state.mode==='month'?`median เดือน${MONTHS_LONG[state.month]} 2026`:`วันที่ ${fmtDate(D.days[state.day])}`;
   const half=monthLen[state.month]/2, few=state.mode==='month'?ST.map(s=>[s.id,monthVals(s.id,state.month,state.q).length]).filter(([,n])=>n<half):[];
-  $('cap1').textContent=`แผนที่ contour ของ TEC เวลา ${t} ${when} ระยะเส้น ${state.step} TECU สามเหลี่ยมคือสถานี เส้นประยาวคือเส้นแบ่งกลางวันกับกลางคืน เส้นจุดคือขอบเขตที่ล้อมรอบด้วยสถานี พื้นที่จางอยู่นอกแนวสถานีและไม่ควรอ่านค่า`
+  $('cap1').textContent=`แผนที่ contour ของ ${SRC} เวลา ${t} ${when} ระยะเส้น ${state.step} TECU สามเหลี่ยมคือสถานี เส้นประยาวคือเส้นแบ่งกลางวันกับกลางคืน เส้นจุดคือขอบเขตที่ล้อมรอบด้วยสถานี พื้นที่จางอยู่นอกแนวสถานีและไม่ควรอ่านค่า`
     +(few.length?` ค่า median ของ ${few.map(([id,n])=>`${id} มาจากข้อมูลเพียง ${n} วัน`).join(' และ ')}`:'');
-  $('cap2').textContent=`TEC ตามเวลา ${when} ทำให้เรียบด้วย moving average 1 ชั่วโมงสองรอบ (หมายเหตุ 1) เส้นตั้งคือเวลาที่เลือก คลิกในกราฟเพื่อเปลี่ยนเวลา`;
+  $('cap2').textContent=`${SRC} ตามเวลา ${when} ทำให้เรียบด้วย moving average 1 ชั่วโมงสองรอบ (หมายเหตุ 1) เส้นตั้งคือเวลาที่เลือก คลิกในกราฟเพื่อเปลี่ยนเวลา`;
 }
 function render(){
   $('clock').textContent=`${fmtUT(state.q)} UT`;
