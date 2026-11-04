@@ -118,12 +118,34 @@ function model(ids){
   for(let j=0;j<NY;j++) for(let i=0;i<NX;i++){
     const c=j*NX+i, lon=lonOf(i), lat=latOf(j), x=lon/10, y=lat/10, phi=[...pts.map(p=>tpsU((x-p[0])**2+(y-p[1])**2)),1,x,y];
     for(let k=0;k<n;k++){ let s=0; for(let a=0;a<N;a++) s+=phi[a]*inv[a][k]; w[c*n+k]=s; }
-    const d=distToHull(lon,lat,hull), t=Math.max(0,Math.min(1,(FADE_ZERO-d)/(FADE_ZERO-FADE_FULL)));
+    const d=distToHull(lon,lat,hull), t=GB?1:Math.max(0,Math.min(1,(FADE_ZERO-d)/(FADE_ZERO-FADE_FULL)));
     mask[c]=t*t*(3-2*t)*255; inside[c]=d===0?1:0; img.data[c*4+3]=mask[c];
   }
   mc.putImageData(img,0,0);
   const m={n,w,mask,inside,hull,maskCv:cv};
   models.set(key,m); return m;
+}
+
+/* ---------- GIM background (only where the page sets TEC_GIM_BG) ---------- */
+// Four stations cannot give the spatial shape, so the map takes it from the monthly median GIM (UQRG):
+// bicubic between the 2.5° x 5° grid points, linear between hours. The station-minus-GIM differences
+// are spread with the same thin-plate spline weights, kept within the range of those differences, and
+// added on top, so the map passes exactly through every station value. There is no fade, because GIM
+// covers the whole map.
+const GB = window.TEC_GIM_BG && window.TEC_GIM ? window.TEC_GIM : null;
+const GBT = GB ? Uint8Array.from(atob(GB.tec),c=>c.charCodeAt(0)) : null;
+const catmull = (p0,p1,p2,p3,t) => .5*(2*p1+(p2-p0)*t+(2*p0-5*p1+4*p2-p3)*t*t+(3*p1-p0-3*p2+p3)*t*t*t);
+function gimAt(m,h,lat,lon){
+  const base=(m*24+h)*GB.nlat*GB.nlon, fi=(87.5-lat)/2.5, fj=(lon+180)/5, i0=Math.floor(fi), j0=Math.floor(fj);
+  const g=(i,j)=>GBT[base+i*GB.nlon+j]*GB.tecStep, row=a=>catmull(g(i0+a,j0-1),g(i0+a,j0),g(i0+a,j0+1),g(i0+a,j0+2),fj-j0);
+  return catmull(row(-1),row(0),row(1),row(2),fi-i0);
+}
+const bgCache=new Map();
+function bgGrid(m,h){
+  const key=m*24+h; let a=bgCache.get(key); if(a) return a;
+  if(bgCache.size>=48) bgCache.clear();
+  a=new Float32Array(NX*NY); for(let j=0;j<NY;j++) for(let i=0;i<NX;i++) a[j*NX+i]=gimAt(m,h,latOf(j),lonOf(i));
+  bgCache.set(key,a); return a;
 }
 
 /* ---------- contour lines (marching squares) ---------- */
@@ -172,9 +194,14 @@ function drawField(){
   const h=state.q, ids=ST.map(s=>s.id).filter(id=>val(id,h)!=null), ctx=fieldCv.getContext('2d');
   $('mapMsg').hidden=ids.length>=3;
   if(ids.length<3){ current=null; ctx.clearRect(0,0,NX,NY); hullEl.setAttribute('points',''); return; }
-  const m=current=model(ids), n=m.n, vals=ids.map(id=>val(id,h)), img=ctx.createImageData(NX,NY), d=img.data;
+  const m=current=model(ids), n=m.n, img=ctx.createImageData(NX,NY), d=img.data;
+  let vals=ids.map(id=>val(id,h)), b0=null, b1=null, f=0, lo=-Infinity, hi=Infinity;
+  if(GB){ const mo=state.month, h0=Math.floor(h/4), h1=(h0+1)%24; f=h%4/4; b0=bgGrid(mo,h0); b1=bgGrid(mo,h1);
+    vals=vals.map((v,k)=>{ const s=byId[ids[k]]; return v-(gimAt(mo,h0,s.lat,s.lon)*(1-f)+gimAt(mo,h1,s.lat,s.lon)*f); });
+    lo=Math.min(...vals); hi=Math.max(...vals); }
   for(let c=0;c<NX*NY;c++){
     let v=0; for(let k=0;k<n;k++) v+=m.w[c*n+k]*vals[k];
+    if(GB) v=b0[c]*(1-f)+b1[c]*f+Math.max(lo,Math.min(hi,v));
     v=Math.max(0,Math.min(FIELD_CLAMP,v)); F[c]=v;
     const col=BANDS[Math.floor(v/state.step)];
     d[c*4]=col[0]; d[c*4+1]=col[1]; d[c*4+2]=col[2]; d[c*4+3]=m.mask[c]*FIELD_OPACITY;
@@ -378,7 +405,7 @@ $('play').addEventListener('click',()=>{ if(state.playing){stopPlay();return;} c
 function drawCaptions(){
   const t=`${fmtUT(state.q)} UT`, when=state.mode==='month'?`median เดือน${MONTHS_LONG[state.month]} 2026`:`วันที่ ${fmtDate(D.days[state.day])}`;
   const half=monthLen[state.month]/2, few=state.mode==='month'?ST.map(s=>[s.id,monthVals(s.id,state.month,state.q).length]).filter(([,n])=>n<half):[];
-  $('cap1').textContent=`แผนที่ contour ของ ${SRC} เวลา ${t} ${when} ระยะเส้น ${state.step} TECU สามเหลี่ยมคือสถานี เส้นประยาวคือเส้นแบ่งกลางวันกับกลางคืน เส้นจุดคือขอบเขตที่ล้อมรอบด้วยสถานี พื้นที่จางอยู่นอกแนวสถานีและไม่ควรอ่านค่า`
+  $('cap1').textContent=`แผนที่ contour ของ ${SRC} เวลา ${t} ${when} ระยะเส้น ${state.step} TECU สามเหลี่ยมคือสถานี เส้นประยาวคือเส้นแบ่งกลางวันกับกลางคืน เส้นจุดคือขอบเขตที่ล้อมรอบด้วยสถานี ${window.TEC_CAP1_NOTE||'พื้นที่จางอยู่นอกแนวสถานีและไม่ควรอ่านค่า'}`
     +(few.length?` ค่า median ของ ${few.map(([id,n])=>`${id} มาจากข้อมูลเพียง ${n} วัน`).join(' และ ')}`:'');
   $('cap2').textContent=`${SRC} ตามเวลา ${when} ${window.TEC_CAP2_NOTE||'ทำให้เรียบด้วย moving average 1 ชั่วโมงสองรอบ (หมายเหตุ 1)'} เส้นตั้งคือเวลาที่เลือก คลิกในกราฟเพื่อเปลี่ยนเวลา`;
 }
